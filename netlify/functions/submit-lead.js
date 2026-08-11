@@ -24,22 +24,18 @@ exports.handler = async (event) => {
   try {
     const payload = JSON.parse(event.body);
 
-    // ÉTAPE 1 : Créer le contact avec données essentielles uniquement
-    const contactBody = {
-      email:     payload.email,
-      firstName: payload.name || "",
-      surname:   payload.company || ""
-    };
-
+    // ÉTAPE 1 : Créer le contact
     const resContact = await fetch(`${BASE_URL}/contacts`, {
       method: "POST",
       headers: HEADERS,
-      body: JSON.stringify(contactBody)
+      body: JSON.stringify({
+        email:     payload.email,
+        firstName: payload.name || "",
+        surname:   payload.company || ""
+      })
     });
 
     const dataContact = await resContact.json();
-    console.log("Réponse Systeme.io contact:", JSON.stringify(dataContact));
-
     const contactId = dataContact?.id;
 
     if (!contactId) {
@@ -50,7 +46,27 @@ exports.handler = async (event) => {
       };
     }
 
-    // ÉTAPE 2 : Récupérer l'ID du tag "quiz-diagnostic"
+    // ÉTAPE 2 : Mettre à jour les champs custom via PATCH
+    await fetch(`${BASE_URL}/contacts/${contactId}`, {
+      method: "PATCH",
+      headers: {
+        "X-API-Key":    SYSTEME_API_KEY,
+        "Content-Type": "application/merge-patch+json"
+      },
+      body: JSON.stringify({
+        fields: [
+          { slug: "score_notoriete",        value: String(payload.score_notoriete || 0) },
+          { slug: "score_fidelisation",     value: String(payload.score_fidelisation || 0) },
+          { slug: "score_differenciation",  value: String(payload.score_differenciation || 0) },
+          { slug: "niveau_notoriete",       value: payload.niveau_notoriete || "" },
+          { slug: "niveau_fidelisation",    value: payload.niveau_fidelisation || "" },
+          { slug: "niveau_differenciation", value: payload.niveau_differenciation || "" },
+          { slug: "secteur",                value: payload.secteur || "" }
+        ]
+      })
+    });
+
+    // ÉTAPE 3 : Récupérer l'ID du tag "quiz-diagnostic"
     const resTags = await fetch(`${BASE_URL}/tags`, { headers: HEADERS });
     const dataTags = await resTags.json();
     const tag = dataTags?.items?.find(t => t.name === "quiz-diagnostic");
@@ -63,7 +79,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // ÉTAPE 3 : Assigner le tag au contact
+    // ÉTAPE 4 : Assigner le tag
     await fetch(`${BASE_URL}/contacts/${contactId}/tags`, {
       method: "POST",
       headers: HEADERS,
