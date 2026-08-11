@@ -7,14 +7,12 @@ const HEADERS = {
 };
 
 exports.handler = async (event) => {
-  // CORS — autorise les appels depuis n'importe quelle origine
   const corsHeaders = {
     "Access-Control-Allow-Origin":  "*",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type"
   };
 
-  // Preflight OPTIONS
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 200, headers: corsHeaders, body: "" };
   }
@@ -26,27 +24,22 @@ exports.handler = async (event) => {
   try {
     const payload = JSON.parse(event.body);
 
-    // ÉTAPE 1 : Créer le contact
+    // ÉTAPE 1 : Créer le contact avec données essentielles uniquement
+    const contactBody = {
+      email:     payload.email,
+      firstName: payload.name || "",
+      surname:   payload.company || ""
+    };
+
     const resContact = await fetch(`${BASE_URL}/contacts`, {
       method: "POST",
       headers: HEADERS,
-      body: JSON.stringify({
-        email:     payload.email,
-        firstName: payload.name || "",
-        fields: [
-          { slug: "company",               value: payload.company || "" },
-          { slug: "score_notoriete",        value: String(payload.score_notoriete || 0) },
-          { slug: "score_fidelisation",     value: String(payload.score_fidelisation || 0) },
-          { slug: "score_differenciation",  value: String(payload.score_differenciation || 0) },
-          { slug: "niveau_notoriete",       value: payload.niveau_notoriete || "" },
-          { slug: "niveau_fidelisation",    value: payload.niveau_fidelisation || "" },
-          { slug: "niveau_differenciation", value: payload.niveau_differenciation || "" },
-          { slug: "secteur",                value: payload.secteur || "" }
-        ]
-      })
+      body: JSON.stringify(contactBody)
     });
 
     const dataContact = await resContact.json();
+    console.log("Réponse Systeme.io contact:", JSON.stringify(dataContact));
+
     const contactId = dataContact?.id;
 
     if (!contactId) {
