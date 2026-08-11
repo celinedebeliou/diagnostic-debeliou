@@ -46,50 +46,55 @@ exports.handler = async (event) => {
       };
     }
 
-    // ÉTAPE 2 : Mettre à jour les champs custom via PATCH
-    await fetch(`${BASE_URL}/contacts/${contactId}`, {
+    // ÉTAPE 2 : PATCH champs custom + log de la réponse
+    const patchBody = {
+      fields: [
+        { slug: "score_notoriete",        value: String(payload.score_notoriete || 0) },
+        { slug: "score_fidelisation",     value: String(payload.score_fidelisation || 0) },
+        { slug: "score_differenciation",  value: String(payload.score_differenciation || 0) },
+        { slug: "niveau_notoriete",       value: payload.niveau_notoriete || "" },
+        { slug: "niveau_fidelisation",    value: payload.niveau_fidelisation || "" },
+        { slug: "niveau_differenciation", value: payload.niveau_differenciation || "" },
+        { slug: "secteur",                value: payload.secteur || "" }
+      ]
+    };
+
+    const resPatch = await fetch(`${BASE_URL}/contacts/${contactId}`, {
       method: "PATCH",
       headers: {
         "X-API-Key":    SYSTEME_API_KEY,
         "Content-Type": "application/merge-patch+json"
       },
-      body: JSON.stringify({
-        fields: [
-          { slug: "score_notoriete",        value: String(payload.score_notoriete || 0) },
-          { slug: "score_fidelisation",     value: String(payload.score_fidelisation || 0) },
-          { slug: "score_differenciation",  value: String(payload.score_differenciation || 0) },
-          { slug: "niveau_notoriete",       value: payload.niveau_notoriete || "" },
-          { slug: "niveau_fidelisation",    value: payload.niveau_fidelisation || "" },
-          { slug: "niveau_differenciation", value: payload.niveau_differenciation || "" },
-          { slug: "secteur",                value: payload.secteur || "" }
-        ]
-      })
+      body: JSON.stringify(patchBody)
     });
 
-    // ÉTAPE 3 : Récupérer l'ID du tag "quiz-diagnostic"
+    const patchText = await resPatch.text();
+    let patchData;
+    try { patchData = JSON.parse(patchText); } catch(e) { patchData = { raw: patchText }; }
+
+    // ÉTAPE 3 : Tag
     const resTags = await fetch(`${BASE_URL}/tags`, { headers: HEADERS });
     const dataTags = await resTags.json();
     const tag = dataTags?.items?.find(t => t.name === "quiz-diagnostic");
 
-    if (!tag) {
-      return {
-        statusCode: 404,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: "Tag 'quiz-diagnostic' introuvable" })
-      };
+    if (tag) {
+      await fetch(`${BASE_URL}/contacts/${contactId}/tags`, {
+        method: "POST",
+        headers: HEADERS,
+        body: JSON.stringify({ tagId: tag.id })
+      });
     }
-
-    // ÉTAPE 4 : Assigner le tag
-    await fetch(`${BASE_URL}/contacts/${contactId}/tags`, {
-      method: "POST",
-      headers: HEADERS,
-      body: JSON.stringify({ tagId: tag.id })
-    });
 
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({ success: true, contactId })
+      body: JSON.stringify({
+        success: true,
+        contactId,
+        patch_status: resPatch.status,
+        patch_response: patchData,
+        patch_body_sent: patchBody
+      })
     };
 
   } catch (err) {
