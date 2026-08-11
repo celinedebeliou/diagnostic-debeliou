@@ -54,8 +54,7 @@ exports.handler = async (event) => {
         { slug: "score_differenciation",  value: String(payload.score_differenciation || 0) },
         { slug: "niveau_notoriete",       value: payload.niveau_notoriete || "" },
         { slug: "niveau_fidelisation",    value: payload.niveau_fidelisation || "" },
-        { slug: "niveau_differenciation", value: payload.niveau_differenciation || "" },
-        { slug: "secteur",                value: payload.secteur || "" }
+        { slug: "niveau_differenciation", value: payload.niveau_differenciation || "" }
       ]
     };
 
