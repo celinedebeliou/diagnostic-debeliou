@@ -2,18 +2,18 @@ const SYSTEME_API_KEY = "bso261tpln7ilky2mdgx8oqvd7x3px74y0h8o0lmv7zr4widg8cvjyb
 
 exports.handler = async () => {
   try {
-    const res = await fetch("https://api.systeme.io/api/contacts?limit=1", {
+    // Récupérer les champs custom disponibles
+    const res = await fetch("https://api.systeme.io/api/contacts?limit=10", {
       headers: {
         "X-API-Key": SYSTEME_API_KEY,
         "Content-Type": "application/json"
       }
     });
 
-    const text = await res.text();
+    const data = await res.json();
 
-    // Essaie de parser le premier contact pour voir ses champs
-    let data;
-    try { data = JSON.parse(text); } catch(e) { data = { raw: text }; }
+    // Extraire les champs du premier contact pour voir les slugs
+    const firstContact = data?.items?.[0];
 
     return {
       statusCode: 200,
@@ -21,7 +21,11 @@ exports.handler = async () => {
         "Access-Control-Allow-Origin": "*",
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(data, null, 2)
+      body: JSON.stringify({
+        first_contact: firstContact,
+        all_field_keys: firstContact ? Object.keys(firstContact) : [],
+        custom_fields: firstContact?.fields || []
+      }, null, 2)
     };
   } catch(err) {
     return {
