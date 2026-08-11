@@ -629,9 +629,8 @@
       document.getElementById("cap-err").style.display = ok ? "none" : "block";
       if (!ok) { document.getElementById("cap-email").focus(); return; }
 
-      // Stocker immédiatement — le lead est capturé avant même le quiz
+      // Stocker les données — envoi après le quiz quand les scores sont calculés
       state.leadData = { name, company, email };
-      submitLead(buildPayload(name, company, email)); // envoi immédiat, sans await
 
       state.screen = "question"; state.currentQ = 0; render();
     });
@@ -720,6 +719,10 @@
     `;
 
     document.getElementById("submit-btn").addEventListener("click", () => {
+      const { name, company, email } = state.leadData || {};
+      if (email) {
+        submitLead(buildPayload(name, company, email));
+      }
       state.screen = "result"; render();
     });
   }
