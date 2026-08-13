@@ -516,7 +516,10 @@
   /* =========================================================
      ÉTAT
   ========================================================= */
-  const state = { screen: "intro", currentQ: 0, answers: {}, leadData: {} };
+  // Lire l'email depuis le paramètre URL (?email=...)
+  const urlEmail = new URLSearchParams(window.location.search).get("email") || "";
+
+  const state = { screen: "intro", currentQ: 0, answers: {}, leadData: { email: urlEmail } };
   const card = document.getElementById("card");
 
   /* =========================================================
@@ -546,20 +549,33 @@
     return p.textes.fort;
   }
 
-  function buildPayload(name, company, email) {
+  function computeProfilRapport(scores) {
+    const n = scores.notoriete / 6;
+    const f = scores.fidelisation / 6;
+    const d = scores.differenciation / 9;
+
+    const tousEleves = n >= 0.67 && f >= 0.67 && d >= 0.67;
+    const tousFaibles = n <= 0.33 && f <= 0.33 && d <= 0.33;
+
+    if (tousFaibles) return "faible_3";
+    if (tousEleves)  return "fort_3";
+    if (n <= f && n <= d) return "faible_notoriete";
+    if (f <= n && f <= d) return "faible_fidelisation";
+    return "faible_differenciation";
+  }
+
+  function buildPayload(email) {
     const scores = computeScores();
     return {
-      name, company, email,
-      secteur: state.answers["secteur"],
-      score_notoriete: scores.notoriete,
-      score_fidelisation: scores.fidelisation,
-      score_differenciation: scores.differenciation,
-      niveau_notoriete: getNiveau("notoriete", scores.notoriete).label,
-      niveau_fidelisation: getNiveau("fidelisation", scores.fidelisation).label,
+      email,
+      score_notoriete:        scores.notoriete,
+      score_fidelisation:     scores.fidelisation,
+      score_differenciation:  scores.differenciation,
+      niveau_notoriete:       getNiveau("notoriete", scores.notoriete).label,
+      niveau_fidelisation:    getNiveau("fidelisation", scores.fidelisation).label,
       niveau_differenciation: getNiveau("differenciation", scores.differenciation).label,
-      answers: state.answers,
-      submitted_at: new Date().toISOString(),
-      source: "quiz-diagnostic-debeliou"
+      profil_rapport:         computeProfilRapport(scores),
+      submitted_at:           new Date().toISOString()
     };
   }
 
@@ -571,7 +587,6 @@
     card.offsetHeight;
     card.style.animation = "";
     if (state.screen === "intro")    return renderIntro();
-    if (state.screen === "capture")  return renderCapture();
     if (state.screen === "question") return renderQuestion();
     if (state.screen === "email")    return renderEmail();
     if (state.screen === "loading")  return renderLoading();
@@ -593,60 +608,7 @@
       <button class="btn btn-primary" id="start-btn">Démarrer mon diagnostic</button>
     `;
     document.getElementById("start-btn").addEventListener("click", () => {
-      state.screen = "capture"; render();
-    });
-  }
-
-  /* --- CAPTURE EMAIL (avant les questions) --- */
-  function renderCapture() {
-    card.innerHTML = `
-      <div class="eyebrow">Avant de commencer</div>
-      <h1 style="font-size:24px; margin-bottom:10px;">À qui on envoie les résultats&nbsp;?</h1>
-      <p class="sub">Entrez vos coordonnées pour recevoir votre rapport personnalisé à la fin du diagnostic.</p>
-      <div class="form-group">
-        <label for="cap-name">Votre prénom</label>
-        <input type="text" id="cap-name" placeholder="Marie" autocomplete="given-name">
-      </div>
-      <div class="form-group">
-        <label for="cap-company">Nom de votre entreprise</label>
-        <input type="text" id="cap-company" placeholder="Restaurant Chez Manette" autocomplete="organization">
-      </div>
-      <div class="form-group">
-        <label for="cap-email">Votre email</label>
-        <input type="email" id="cap-email" placeholder="vous@monentreprise.com" autocomplete="email">
-        <div class="err" id="cap-err">Entrez une adresse email valide.</div>
-      </div>
-      <button class="btn btn-primary" id="cap-btn">Démarrer le diagnostic →</button>
-      <p class="privacy">Aucun spam. Votre rapport, puis quelques conseils pratiques.<br>Désabonnement en un clic à tout moment.</p>
-    `;
-
-    document.getElementById("cap-btn").addEventListener("click", () => {
-      const name    = document.getElementById("cap-name").value.trim();
-      const company = document.getElementById("cap-company").value.trim();
-      const email   = document.getElementById("cap-email").value.trim();
-      const ok      = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-      document.getElementById("cap-err").style.display = ok ? "none" : "block";
-      if (!ok) { document.getElementById("cap-email").focus(); return; }
-
-      // Stocker les données — envoi après le quiz quand les scores sont calculés
-      state.leadData = { name, company, email };
-
       state.screen = "question"; state.currentQ = 0; render();
-    });
-
-    document.getElementById("cap-email").addEventListener("keydown", e => {
-      if (e.key === "Enter") document.getElementById("cap-btn").click();
-    });
-
-    // Retour vers intro
-    card.insertAdjacentHTML("beforeend", `
-      <div style="text-align:center; margin-top:12px;">
-        <button class="btn btn-ghost" id="cap-back">← Retour</button>
-      </div>
-    `);
-    document.getElementById("cap-back").addEventListener("click", () => {
-      state.screen = "intro"; render();
     });
   }
 
@@ -692,7 +654,7 @@
     });
 
     document.getElementById("back-btn").addEventListener("click", () => {
-      if (idx === 0) { state.screen = "capture"; render(); }
+      if (idx === 0) { state.screen = "intro"; render(); }
       else { state.currentQ--; render(); }
     });
   }
@@ -705,24 +667,21 @@
     }
   }
 
-  /* --- EMAIL (confirmation finale — coordonnées déjà collectées) --- */
+  /* --- EMAIL (confirmation finale) --- */
   function renderEmail() {
-    const name  = state.leadData?.name || "";
     const email = state.leadData?.email || "";
 
     card.innerHTML = `
       <div class="eyebrow">Dernière étape</div>
       <h1 style="font-size:24px; margin-bottom:10px;">Votre rapport est prêt&nbsp;!</h1>
-      <p class="sub">On envoie votre diagnostic complet à <strong style="color:var(--ink-dark);">${email}</strong>. Confirmez pour voir vos résultats.</p>
+      <p class="sub">On envoie votre diagnostic complet à <strong style="color:var(--ink-dark);">${email || "votre adresse email"}</strong>. Confirmez pour voir vos résultats.</p>
       <button class="btn btn-primary" id="submit-btn">Voir mon rapport →</button>
       <p class="privacy" style="margin-top:12px;">Aucun spam. Votre rapport, puis quelques conseils pratiques.<br>Désabonnement en un clic à tout moment.</p>
     `;
 
     document.getElementById("submit-btn").addEventListener("click", () => {
-      const { name, company, email } = state.leadData || {};
-      if (email) {
-        submitLead(buildPayload(name, company, email));
-      }
+      const email = state.leadData?.email;
+      if (email) submitLead(buildPayload(email));
       state.screen = "result"; render();
     });
   }
