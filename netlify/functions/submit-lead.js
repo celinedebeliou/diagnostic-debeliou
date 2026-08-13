@@ -23,55 +23,57 @@ exports.handler = async (event) => {
 
   try {
     const payload = JSON.parse(event.body);
+    const { email } = payload;
 
-    // ÉTAPE 1 : Créer le contact
-    const resContact = await fetch(`${BASE_URL}/contacts`, {
-      method: "POST",
-      headers: HEADERS,
-      body: JSON.stringify({
-        email:     payload.email,
-        firstName: payload.name || "",
-        surname:   payload.company || ""
-      })
-    });
-
-    const dataContact = await resContact.json();
-    const contactId = dataContact?.id;
-
-    if (!contactId) {
+    if (!email) {
       return {
         statusCode: 400,
         headers: corsHeaders,
-        body: JSON.stringify({ error: "Contact ID non récupéré", detail: dataContact })
+        body: JSON.stringify({ error: "Email manquant" })
       };
     }
 
-    // ÉTAPE 2 : PATCH champs custom + log de la réponse
-    const patchBody = {
-      fields: [
-        { slug: "score_notoriete",        value: String(payload.score_notoriete || 0) },
-        { slug: "score_fidelisation",     value: String(payload.score_fidelisation || 0) },
-        { slug: "score_differenciation",  value: String(payload.score_differenciation || 0) },
-        { slug: "niveau_notoriete",       value: payload.niveau_notoriete || "" },
-        { slug: "niveau_fidelisation",    value: payload.niveau_fidelisation || "" },
-        { slug: "niveau_differenciation", value: payload.niveau_differenciation || "" }
-      ]
-    };
+    // ÉTAPE 1 : Trouver le contact existant par email
+    const resSearch = await fetch(
+      `${BASE_URL}/contacts?email=${encodeURIComponent(email)}&limit=10`,
+      { headers: HEADERS }
+    );
+    const dataSearch = await resSearch.json();
+    const contact = dataSearch?.items?.find(c => c.email === email);
 
+    if (!contact) {
+      return {
+        statusCode: 404,
+        headers: corsHeaders,
+        body: JSON.stringify({ error: `Contact introuvable pour ${email}` })
+      };
+    }
+
+    const contactId = contact.id;
+
+    // ÉTAPE 2 : PATCH les champs du diagnostic
     const resPatch = await fetch(`${BASE_URL}/contacts/${contactId}`, {
       method: "PATCH",
       headers: {
         "X-API-Key":    SYSTEME_API_KEY,
         "Content-Type": "application/merge-patch+json"
       },
-      body: JSON.stringify(patchBody)
+      body: JSON.stringify({
+        fields: [
+          { slug: "score_notoriete",        value: String(payload.score_notoriete || 0) },
+          { slug: "score_fidelisation",     value: String(payload.score_fidelisation || 0) },
+          { slug: "score_differenciation",  value: String(payload.score_differenciation || 0) },
+          { slug: "niveau_notoriete",       value: payload.niveau_notoriete || "" },
+          { slug: "niveau_fidelisation",    value: payload.niveau_fidelisation || "" },
+          { slug: "niveau_differenciation", value: payload.niveau_differenciation || "" },
+          { slug: "profil_rapport",         value: payload.profil_rapport || "" }
+        ]
+      })
     });
 
-    const patchText = await resPatch.text();
-    let patchData;
-    try { patchData = JSON.parse(patchText); } catch(e) { patchData = { raw: patchText }; }
+    const patchData = await resPatch.json();
 
-    // ÉTAPE 3 : Tag
+    // ÉTAPE 3 : Assigner le tag "quiz-diagnostic"
     const resTags = await fetch(`${BASE_URL}/tags`, { headers: HEADERS });
     const dataTags = await resTags.json();
     const tag = dataTags?.items?.find(t => t.name === "quiz-diagnostic");
@@ -91,8 +93,7 @@ exports.handler = async (event) => {
         success: true,
         contactId,
         patch_status: resPatch.status,
-        patch_response: patchData,
-        patch_body_sent: patchBody
+        profil_rapport: payload.profil_rapport
       })
     };
 
