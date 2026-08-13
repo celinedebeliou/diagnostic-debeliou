@@ -23,41 +23,35 @@ exports.handler = async (event) => {
 
   try {
     const payload = JSON.parse(event.body);
-    const { email } = payload;
+    const { email, prenom, nom, company } = payload;
 
     if (!email) {
-      return {
-        statusCode: 400,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: "Email manquant" })
-      };
+      return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: "Email manquant" }) };
     }
 
-    // ÉTAPE 1 : Trouver le contact existant par email
-    const resSearch = await fetch(
-      `${BASE_URL}/contacts?email=${encodeURIComponent(email)}&limit=10`,
-      { headers: HEADERS }
-    );
-    const dataSearch = await resSearch.json();
-    const contact = dataSearch?.items?.find(c => c.email === email);
+    // ÉTAPE 1 : Créer ou mettre à jour le contact
+    const resContact = await fetch(`${BASE_URL}/contacts`, {
+      method: "POST",
+      headers: HEADERS,
+      body: JSON.stringify({
+        email,
+        firstName: prenom || "",
+        surname:   nom || "",
+        fields: [{ slug: "company", value: company || "" }]
+      })
+    });
 
-    if (!contact) {
-      return {
-        statusCode: 404,
-        headers: corsHeaders,
-        body: JSON.stringify({ error: `Contact introuvable pour ${email}` })
-      };
+    const dataContact = await resContact.json();
+    const contactId = dataContact?.id;
+
+    if (!contactId) {
+      return { statusCode: 400, headers: corsHeaders, body: JSON.stringify({ error: "Contact ID non récupéré", detail: dataContact }) };
     }
-
-    const contactId = contact.id;
 
     // ÉTAPE 2 : PATCH les champs du diagnostic
-    const resPatch = await fetch(`${BASE_URL}/contacts/${contactId}`, {
+    await fetch(`${BASE_URL}/contacts/${contactId}`, {
       method: "PATCH",
-      headers: {
-        "X-API-Key":    SYSTEME_API_KEY,
-        "Content-Type": "application/merge-patch+json"
-      },
+      headers: { "X-API-Key": SYSTEME_API_KEY, "Content-Type": "application/merge-patch+json" },
       body: JSON.stringify({
         fields: [
           { slug: "score_notoriete",        value: String(payload.score_notoriete || 0) },
@@ -70,8 +64,6 @@ exports.handler = async (event) => {
         ]
       })
     });
-
-    const patchData = await resPatch.json();
 
     // ÉTAPE 3 : Assigner le tag "quiz-diagnostic"
     const resTags = await fetch(`${BASE_URL}/tags`, { headers: HEADERS });
@@ -89,19 +81,10 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({
-        success: true,
-        contactId,
-        patch_status: resPatch.status,
-        profil_rapport: payload.profil_rapport
-      })
+      body: JSON.stringify({ success: true, contactId, profil_rapport: payload.profil_rapport })
     };
 
   } catch (err) {
-    return {
-      statusCode: 500,
-      headers: corsHeaders,
-      body: JSON.stringify({ error: err.message })
-    };
+    return { statusCode: 500, headers: corsHeaders, body: JSON.stringify({ error: err.message }) };
   }
 };
