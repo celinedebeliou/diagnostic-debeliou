@@ -566,8 +566,12 @@
 
   function buildPayload(email) {
     const scores = computeScores();
+    const { prenom, nom, company } = state.leadData || {};
     return {
       email,
+      prenom:  prenom || "",
+      nom:     nom || "",
+      company: company || "",
       score_notoriete:        scores.notoriete,
       score_fidelisation:     scores.fidelisation,
       score_differenciation:  scores.differenciation,
@@ -593,21 +597,65 @@
     if (state.screen === "result")   return renderResult();
   }
 
-  /* --- INTRO --- */
+  /* --- INTRO / CAPTURE --- */
   function renderIntro() {
     card.innerHTML = `
       <div class="eyebrow">Diagnostic gratuit · 5 minutes</div>
       <h1>Votre marque est-elle aussi visible qu'elle devrait l'être&nbsp;?</h1>
       <p class="lede">8 questions pour mesurer votre notoriété, votre fidélisation et votre différenciation — et savoir exactement sur quoi agir en priorité.</p>
-      <p class="sub">Conçu pour les TPE-PME en Martinique. Résultat personnalisé, immédiat, gratuit.</p>
       <div class="meta-strip">
         <div class="meta-item"><strong>8</strong><span>questions</span></div>
         <div class="meta-item"><strong>3</strong><span>piliers analysés</span></div>
         <div class="meta-item"><strong>100%</strong><span>gratuit</span></div>
       </div>
+
+      <div class="form-group">
+        <label for="cap-prenom">Prénom *</label>
+        <input type="text" id="cap-prenom" placeholder="Marie" autocomplete="given-name">
+        <div class="err" id="err-prenom">Ce champ est obligatoire.</div>
+      </div>
+      <div class="form-group">
+        <label for="cap-nom">Nom de famille *</label>
+        <input type="text" id="cap-nom" placeholder="Dupont" autocomplete="family-name">
+        <div class="err" id="err-nom">Ce champ est obligatoire.</div>
+      </div>
+      <div class="form-group">
+        <label for="cap-company">Nom de l'entreprise *</label>
+        <input type="text" id="cap-company" placeholder="Restaurant Chez Manette" autocomplete="organization">
+        <div class="err" id="err-company">Ce champ est obligatoire.</div>
+      </div>
+      <div class="form-group">
+        <label for="cap-email">E-mail *</label>
+        <input type="email" id="cap-email" placeholder="vous@monentreprise.com" autocomplete="email">
+        <div class="err" id="err-email">Entrez une adresse email valide.</div>
+      </div>
+
+      <div style="margin-bottom:20px; padding:16px; background:var(--blue-bg); border-radius:12px; border:1px solid var(--line);">
+        <p style="font-size:12px; color:var(--ink-mid); line-height:1.7; margin:0;">
+          En cliquant sur <strong>"Démarrer mon diagnostic"</strong>, vous acceptez de recevoir des informations de la part de <strong>DEBELIOU Agence</strong> sur votre adresse email, notamment les résultats de ce diagnostic et des conseils personnalisés en communication. Vos coordonnées restent strictement confidentielles et ne seront jamais transmises à des tiers.<br><br>
+          <strong>Conformément au RGPD</strong> (Règlement Général sur la Protection des Données — UE 2016/679), vous disposez d'un droit d'accès, de rectification et de suppression de vos données, ainsi que d'un droit d'opposition et de désinscription à tout moment en cliquant sur le lien de désabonnement présent dans chaque email. Pour exercer vos droits, contactez-nous à <a href="mailto:contact@debeliou.com" style="color:var(--ink);">contact@debeliou.com</a>.
+        </p>
+      </div>
+
       <button class="btn btn-primary" id="start-btn">Démarrer mon diagnostic</button>
     `;
+
     document.getElementById("start-btn").addEventListener("click", () => {
+      const prenom  = document.getElementById("cap-prenom").value.trim();
+      const nom     = document.getElementById("cap-nom").value.trim();
+      const company = document.getElementById("cap-company").value.trim();
+      const email   = document.getElementById("cap-email").value.trim();
+      const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+      let valid = true;
+      document.getElementById("err-prenom").style.display  = prenom   ? "none" : "block"; if (!prenom)   valid = false;
+      document.getElementById("err-nom").style.display     = nom      ? "none" : "block"; if (!nom)      valid = false;
+      document.getElementById("err-company").style.display = company  ? "none" : "block"; if (!company)  valid = false;
+      document.getElementById("err-email").style.display   = emailOk  ? "none" : "block"; if (!emailOk)  valid = false;
+
+      if (!valid) return;
+
+      state.leadData = { prenom, nom, company, email };
       state.screen = "question"; state.currentQ = 0; render();
     });
   }
@@ -669,8 +717,7 @@
 
   /* --- EMAIL (confirmation finale) --- */
   function renderEmail() {
-    const email = state.leadData?.email || "";
-
+    const { prenom, email } = state.leadData || {};
     card.innerHTML = `
       <div class="eyebrow">Dernière étape</div>
       <h1 style="font-size:24px; margin-bottom:10px;">Votre rapport est prêt&nbsp;!</h1>
@@ -678,7 +725,6 @@
       <button class="btn btn-primary" id="submit-btn">Voir mon rapport →</button>
       <p class="privacy" style="margin-top:12px;">Aucun spam. Votre rapport, puis quelques conseils pratiques.<br>Désabonnement en un clic à tout moment.</p>
     `;
-
     document.getElementById("submit-btn").addEventListener("click", () => {
       const email = state.leadData?.email;
       if (email) submitLead(buildPayload(email));
